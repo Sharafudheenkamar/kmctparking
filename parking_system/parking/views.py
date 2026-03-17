@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.utils import timezone
 from django.db.models import Q
+from datetime import timedelta
 from .models import ParkingSlot, UserProfile, AdminProfile, Booking
 from .forms import UserRegistrationForm, AdminRegistrationForm, ParkingSlotForm, BookingForm
 from django.views.decorators.csrf import csrf_exempt
@@ -166,34 +167,107 @@ def delete_slot(request, slot_id):
     return redirect('manage_slots')
 
 # Booking Management
+
 @login_required
 def book_slot(request):
     if not hasattr(request.user, 'userprofile'):
         return redirect('admin_dashboard')
-    
+
+    now = timezone.now()
+
     if request.method == 'POST':
-        form = BookingForm(request.POST)
-        if form.is_valid():
-            booking = form.save(commit=False)
-            booking.user = request.user
-            booking.save()
-            
-            # Update slot status
-            slot = booking.slot
-            slot.is_occupied = True
-            slot.save()
-            
-            messages.success(request, f'Slot {slot.slot_number} booked successfully!')
-            return redirect('payment', booking_id=booking.booking_id)
-    else:
-        form = BookingForm()
-    
-    vacant_slots = ParkingSlot.objects.filter(is_occupied=False)
+        selected_slot_id = request.POST.get('selected_slot')
+        payment_type = request.POST.get('payment_type')
+        requested_start_time = request.POST.get('start_time')
+        requested_end_time = request.POST.get('end_time')
+
+        if not selected_slot_id or payment_type not in {'hourly', 'daily'}:
+            messages.error(request, 'Please select a slot and payment type to continue.')
+            return redirect('book_slot')
+
+        if not requested_start_time or not requested_end_time:
+            messages.error(request, 'Please select both booking start and end time.')
+            return redirect('book_slot')
+
+        try:
+            start_time = timezone.make_aware(timezone.datetime.fromisoformat(requested_start_time))
+            end_time = timezone.make_aware(timezone.datetime.fromisoformat(requested_end_time))
+        except ValueError:
+            messages.error(request, 'Invalid booking time selected.')
+            return redirect('book_slot')
+
+        if start_time < now or start_time > (now + timedelta(minutes=30)):
+            messages.error(request, 'You can only set the start time from now up to 30 minutes ahead.')
+            return redirect('book_slot')
+
+        if end_time <= start_time:
+            messages.error(request, 'End time must be greater than start time.')
+            return redirect('book_slot')
+
+        slot = get_object_or_404(ParkingSlot, id=selected_slot_id)
+        has_active_booking = Booking.objects.filter(slot=slot, status='active').exists()
+
+        if slot.is_occupied or has_active_booking:
+            messages.error(request, f'Slot {slot.slot_number} is not vacant for booking.')
+            return redirect('book_slot')
+
+        booking = Booking.objects.create(
+            user=request.user,
+            slot=slot,
+            payment_type=payment_type,
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+        slot.is_occupied = True
+        slot.save()
+
+        messages.success(request, f'Slot {slot.slot_number} booked successfully!')
+        return redirect('booking_confirmation', booking_id=booking.booking_id)
+
+    slots = ParkingSlot.objects.all().order_by('slot_number')
+    active_booking_slot_ids = set(
+        Booking.objects.filter(status='active').values_list('slot_id', flat=True)
+    )
+
+    slot_states = []
+    for slot in slots:
+        is_occupied = slot.is_occupied
+        is_booked = slot.id in active_booking_slot_ids
+        is_vacant = not (is_occupied or is_booked)
+
+        if is_vacant:
+            state = 'vacant'
+            status_label = 'Vacant'
+        elif is_occupied:
+            state = 'occupied'
+            status_label = 'Occupied (physical)'
+        else:
+            state = 'booked'
+            status_label = 'Occupied (booked)'
+
+        slot_states.append({
+            'slot': slot,
+            'is_occupied': is_occupied,
+            'is_booked': is_booked,
+            'is_vacant': is_vacant,
+            'is_available': is_vacant,
+            'state': state,
+            'status_label': status_label,
+        })
+
     context = {
-        'form': form,
-        'vacant_slots': vacant_slots
+        'slot_states': slot_states,
+        'min_start_time': now.strftime('%Y-%m-%dT%H:%M'),
+        'max_start_time': (now + timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M'),
     }
     return render(request, 'parking/book_slot.html', context)
+
+
+@login_required
+def booking_confirmation(request, booking_id):
+    booking = get_object_or_404(Booking, booking_id=booking_id, user=request.user)
+    return render(request, 'parking/booking_confirmation.html', {'booking': booking})
 
 @login_required
 def cancel_booking(request, booking_id):
@@ -342,4 +416,3 @@ def get_slot_status(request):
         'total_slots': len(slot_data),
         'vacant_slots': len([s for s in slot_data if not s['is_occupied']])
     })
-
