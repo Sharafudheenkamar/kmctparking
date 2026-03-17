@@ -118,13 +118,19 @@
 
 {% block extra_js %}
 <script>
+let slotRefreshInFlight = false;
+let slotRefreshTimer = null;
+
 function refreshSlots() {
+    if (slotRefreshInFlight || document.hidden) return;
+    slotRefreshInFlight = true;
+
     fetch('/api/slots/status/')
         .then(response => response.json())
         .then(data => {
             const slotGrid = document.getElementById('slot-grid');
             slotGrid.innerHTML = '';
-            
+
             data.slots.forEach(slot => {
                 const slotDiv = document.createElement('div');
                 slotDiv.className = 'col-md-2 col-sm-4 col-6 mb-3';
@@ -140,13 +146,36 @@ function refreshSlots() {
                 slotGrid.appendChild(slotDiv);
             });
         })
-        .catch(error => console.error('Error:', error));
+        .catch(error => console.error('Error:', error))
+        .finally(() => {
+            slotRefreshInFlight = false;
+        });
 }
+
+function startSlotPolling() {
+    if (slotRefreshTimer) return;
+    slotRefreshTimer = setInterval(refreshSlots, 30000);
+}
+
+function stopSlotPolling() {
+    if (!slotRefreshTimer) return;
+    clearInterval(slotRefreshTimer);
+    slotRefreshTimer = null;
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        stopSlotPolling();
+    } else {
+        refreshSlots();
+        startSlotPolling();
+    }
+});
 
 // Load slots on page load and refresh every 30 seconds
 document.addEventListener('DOMContentLoaded', function() {
     refreshSlots();
-    setInterval(refreshSlots, 30000);
+    startSlotPolling();
 });
 </script>
 {% endblock %}
