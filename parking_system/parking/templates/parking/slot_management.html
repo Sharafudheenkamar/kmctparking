@@ -1,0 +1,433 @@
+{% extends 'parking/base.html' %}
+{% load static %}
+
+{% block title %}Slot Management - Smart Parking System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .management-container {
+        background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%);
+        min-height: 85vh;
+        padding: 2rem 0;
+    }
+    
+    .management-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    }
+    
+    .management-header {
+        background: linear-gradient(45deg, #fd79a8, #fdcb6e);
+        color: white;
+        padding: 2rem;
+        border-radius: 20px 20px 0 0;
+        text-align: center;
+    }
+    
+    .stats-row {
+        background: #f8f9fa;
+        border-radius: 15px;
+        padding: 2rem;
+        margin: 2rem 0;
+    }
+    
+    .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: center;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        transition: transform 0.3s;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .add-slot-form {
+        background: linear-gradient(135deg, #00b894, #00cec9);
+        color: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .form-control {
+        border: 2px solid #e9ecef;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        transition: all 0.3s;
+    }
+    
+    .form-control:focus {
+        border-color: #00b894;
+        box-shadow: 0 0 15px rgba(0, 184, 148, 0.2);
+    }
+    
+    .btn-add {
+        background: white;
+        color: #00b894;
+        border: 2px solid white;
+        border-radius: 10px;
+        padding: 0.75rem 2rem;
+        font-weight: bold;
+        transition: all 0.3s;
+    }
+    
+    .btn-add:hover {
+        background: #00b894;
+        color: white;
+        border-color: #00b894;
+    }
+    
+    .slots-table {
+        background: white;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    }
+    
+    .table thead {
+        background: linear-gradient(45deg, #6c5ce7, #a29bfe);
+        color: white;
+    }
+    
+    .table thead th {
+        border: none;
+        padding: 1rem;
+        font-weight: 600;
+    }
+    
+    .table tbody tr {
+        transition: all 0.3s;
+    }
+    
+    .table tbody tr:hover {
+        background-color: #f8f9fa;
+        transform: scale(1.01);
+    }
+    
+    .status-badge {
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-size: 0.85rem;
+        font-weight: bold;
+    }
+    
+    .status-available {
+        background: #d1f2eb;
+        color: #00b894;
+    }
+    
+    .status-occupied {
+        background: #fadbd8;
+        color: #e74c3c;
+    }
+    
+    .btn-action {
+        border-radius: 8px;
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+        margin: 0 0.2rem;
+        transition: transform 0.2s;
+    }
+    
+    .btn-action:hover {
+        transform: translateY(-2px);
+    }
+    
+    .real-time-status {
+        background: linear-gradient(135deg, #e17055, #fd7e14);
+        color: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    
+    .arduino-indicator {
+        display: inline-flex;
+        align-items: center;
+        background: rgba(255,255,255,0.2);
+        border-radius: 50px;
+        padding: 0.5rem 1rem;
+        margin: 0 0.5rem;
+    }
+    
+    .connection-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+        animation: pulse 2s infinite;
+    }
+    
+    .connected { background: #00b894; }
+    .disconnected { background: #e74c3c; }
+    
+    @keyframes pulse {
+        0% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.7; transform: scale(1.1); }
+        100% { opacity: 1; transform: scale(1); }
+    }
+    
+    .bulk-actions {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="management-container">
+    <div class="container">
+        <div class="management-card">
+            <div class="management-header">
+                <h2><i class="fas fa-cogs me-2"></i>Parking Slot Management</h2>
+                <p>Add, update, and monitor parking slots in real-time</p>
+            </div>
+            
+            <div class="card-body p-4">
+                <div class="real-time-status">
+                    <h5><i class="fas fa-wifi me-2"></i>System Status</h5>
+                    <div class="d-flex justify-content-center align-items-center">
+                        <div class="arduino-indicator">
+                            <div class="connection-dot connected" id="connectionStatus"></div>
+                            <span id="connectionText">Arduino Connected</span>
+                        </div>
+                        <div class="arduino-indicator">
+                            <div class="connection-dot connected"></div>
+                            <span>Database Online</span>
+                        </div>
+                        <div class="arduino-indicator">
+                            <div class="connection-dot connected"></div>
+                            <span>Real-time Updates Active</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stats-row">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <div class="stat-card">
+                                <i class="fas fa-parking fa-3x text-primary mb-2"></i>
+                                <h4>{{ slots.count }}</h4>
+                                <p class="mb-0">Total Slots</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="stat-card">
+                                <i class="fas fa-check-circle fa-3x text-success mb-2"></i>
+                                <h4>{{ slots|length|add:"-1" }}</h4>
+                                <p class="mb-0">Available</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="stat-card">
+                                <i class="fas fa-times-circle fa-3x text-danger mb-2"></i>
+                                <h4>1</h4>
+                                <p class="mb-0">Occupied</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="stat-card">
+                                <i class="fas fa-tools fa-3x text-warning mb-2"></i>
+                                <h4>0</h4>
+                                <p class="mb-0">Maintenance</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="add-slot-form">
+                    <h5><i class="fas fa-plus me-2"></i>Add New Parking Slot</h5>
+                    <form method="post" enctype="multipart/form-data" class="row align-items-end">
+                        {% csrf_token %}
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Slot Number</label>
+                            {{ form.slot_number }}
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Slot Type</label>
+                            {{ form.slot_type }}
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Hourly Rate</label>
+                            {{ form.hourly_rate }}
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Daily Rate</label>
+                            {{ form.daily_rate }}
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Arduino Pin</label>
+                            {{ form.arduino_pin }}
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Parking Image</label>
+                            {{ form.parking_map }}
+                        </div>
+                        <div class="col-md-12 mb-3">
+                            <button type="submit" class="btn btn-add">
+                                <i class="fas fa-plus me-1"></i>Add Slot
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="bulk-actions">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h6 class="mb-0"><i class="fas fa-tasks me-2"></i>Bulk Actions</h6>
+                            <small class="text-muted">Select multiple slots to perform bulk operations</small>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <button class="btn btn-sm btn-outline-primary me-2" onclick="selectAll()">
+                                <i class="fas fa-check-square me-1"></i>Select All
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="bulkDelete()">
+                                <i class="fas fa-trash me-1"></i>Delete Selected
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="slots-table">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        <input type="checkbox" class="form-check-input" id="selectAllCheckbox">
+                                    </th>
+                                    <th><i class="fas fa-image me-2"></i>Image</th>
+                                    <th><i class="fas fa-hashtag me-2"></i>Slot #</th>
+                                    <th><i class="fas fa-tag me-2"></i>Type</th>
+                                    <th><i class="fas fa-signal me-2"></i>Status</th>
+                                    <th><i class="fas fa-money-bill me-2"></i>Hourly Rate</th>
+                                    <th><i class="fas fa-calendar me-2"></i>Daily Rate</th>
+                                    <th><i class="fas fa-microchip me-2"></i>Arduino Pin</th>
+                                    <th><i class="fas fa-clock me-2"></i>Created</th>
+                                    <th><i class="fas fa-cog me-2"></i>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="slotsTableBody">
+                                {% for slot in slots %}
+                                <tr data-slot-id="{{ slot.slot_number }}">
+                                    <td>
+                                        <input type="checkbox" class="form-check-input slot-checkbox" value="{{ slot.id }}">
+                                    </td>
+                                    <td>
+                                        {% if slot.parking_map %}
+                                            <img src="{{ slot.parking_map.url }}" alt="{{ slot.slot_number }}" style="width: 70px; height: 70px; object-fit: cover; border-radius: 8px;">
+                                        {% else %}
+                                            <span class="badge bg-secondary">No Image</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <strong>{{ slot.slot_number }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ slot.slot_type|capfirst }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="status-badge {% if slot.is_occupied %}status-occupied{% else %}status-available{% endif %}">
+                                            <i class="fas fa-circle me-1"></i>
+                                            {% if slot.is_occupied %}Occupied{% else %}Available{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>₹{{ slot.hourly_rate }}</td>
+                                    <td>₹{{ slot.daily_rate }}</td>
+                                    <td>
+                                        {% if slot.arduino_pin %}
+                                            <span class="badge bg-success">Pin {{ slot.arduino_pin }}</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Not Set</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ slot.created_at|date:"M d, Y" }}</td>
+                                    <td>
+                                        <button class="btn btn-primary btn-action btn-edit" data-slot-id="{{ slot.id }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-warning btn-action btn-toggle" data-slot-id="{{ slot.id }}">
+                                            <i class="fas fa-power-off"></i>
+                                        </button>
+                                        <button class="btn btn-danger btn-action btn-delete" data-slot-id="{{ slot.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="10" class="text-center py-4">
+                                        <i class="fas fa-parking fa-3x text-muted mb-3"></i>
+                                        <h5 class="text-muted">No parking slots added yet</h5>
+                                        <p class="text-muted">Add your first parking slot using the form above</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editSlotModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Parking Slot</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editSlotForm" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" id="editSlotId">
+                    <div class="mb-3">
+                        <label class="form-label">Slot Number</label>
+                        <input type="text" class="form-control" id="editSlotNumber">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Slot Type</label>
+                        <select class="form-control" id="editSlotType">
+                            <option value="regular">Regular</option>
+                            <option value="vip">VIP</option>
+                            <option value="disabled">Disabled</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Hourly Rate</label>
+                            <input type="number" class="form-control" id="editHourlyRate">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Daily Rate</label>
+                            <input type="number" class="form-control" id="editDailyRate">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Arduino Pin</label>
+                        <input type="number" class="form-control" id="editArduinoPin">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Parking Image</label>
+                        <input type="file" class="form-control" id="editParkingMap" name="parking_map">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends 'parking/base.html' %}
+{% load static %}
+
+{% block title %}User Login - Smart Parking{% endblock %}
+
+{% block extra_css %}
+<style>
+    .login-container {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 80vh;
+        display: flex;
+        align-items: center;
+        margin-top: -2rem;
+    }
+    .login-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    .login-header {
+        background: linear-gradient(45deg, #1e3c72, #2a5298);
+        color: white;
+        padding: 2rem;
+        text-align: center;
+    }
+    .parking-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        animation: bounce 2s infinite;
+    }
+    @keyframes bounce {
+        0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+        40% { transform: translateY(-10px); }
+        60% { transform: translateY(-5px); }
+    }
+    .form-control {
+        border-radius: 25px;
+        padding: 1rem 1.5rem;
+        border: 2px solid #e0e0e0;
+        transition: all 0.3s;
+    }
+    .form-control:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+    }
+    .btn-login {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        border: none;
+        border-radius: 25px;
+        padding: 1rem 2rem;
+        color: white;
+        font-weight: bold;
+        transition: transform 0.3s;
+    }
+    .btn-login:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    }
+    .car-animation {
+        position: absolute;
+        top: 20%;
+        right: 10%;
+        font-size: 3rem;
+        color: rgba(255,255,255,0.3);
+        animation: drive 3s ease-in-out infinite;
+    }
+    @keyframes drive {
+        0% { transform: translateX(0px); }
+        50% { transform: translateX(20px); }
+        100% { transform: translateX(0px); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <i class="fas fa-car car-animation"></i>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="login-card">
+                    <div class="login-header">
+                        <div class="parking-icon">
+                            <i class="fas fa-parking"></i>
+                        </div>
+                        <h2>Park Smart, Park Easy</h2>
+                        <p>Login to your account</p>
+                    </div>
+                    <div class="card-body p-4">
+                        <form method="post">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-transparent border-0">
+                                        <i class="fas fa-user text-primary"></i>
+                                    </span>
+                                    <input type="text" name="username" class="form-control" placeholder="Username" required>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-transparent border-0">
+                                        <i class="fas fa-lock text-primary"></i>
+                                    </span>
+                                    <input type="password" name="password" class="form-control" placeholder="Password" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-login w-100 mb-3">
+                                <i class="fas fa-sign-in-alt me-2"></i>Login
+                            </button>
+                        </form>
+                        <div class="text-center">
+                            <p>Don't have an account? <a href="{% url 'user_register' %}" class="text-primary fw-bold">Register here</a></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+ 

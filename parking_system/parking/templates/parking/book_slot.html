@@ -1,0 +1,361 @@
+{% extends 'parking/base.html' %}
+{% load static %}
+
+{% block title %}Book Parking Slot - Smart Parking System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .booking-container {
+        background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+        min-height: 85vh;
+        padding: 2rem 0;
+    }
+    
+    .booking-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    
+    .booking-header {
+        background: linear-gradient(45deg, #e17055, #fdcb6e);
+        color: white;
+        padding: 2.5rem 2rem;
+        text-align: center;
+    }
+    
+    .slot-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin: 2rem 0;
+    }
+    
+    .slot-card {
+        border: 2px solid #e9ecef;
+        border-radius: 15px;
+        padding: 1.5rem 1rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .slot-card.available {
+        border-color: #00b894;
+        background: linear-gradient(135deg, #00b89410, #00cec910);
+    }
+    
+    .slot-card.occupied {
+        border-color: #e17055;
+        background: linear-gradient(135deg, #e1705510, #fd7e1410);
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+    
+    .slot-card.selected {
+        border-color: #0984e3;
+        background: linear-gradient(135deg, #0984e320, #74b9ff20);
+        transform: scale(1.05);
+    }
+    
+    .slot-card:hover:not(.occupied) {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    
+    .slot-number {
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+    
+    .slot-status {
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .slot-price {
+        font-weight: bold;
+        color: #2d3436;
+    }
+    
+    .payment-options {
+        background: #f8f9fa;
+        border-radius: 15px;
+        padding: 2rem;
+        margin: 2rem 0;
+    }
+    
+    .payment-option {
+        border: 2px solid #dee2e6;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .payment-option.selected {
+        border-color: #0984e3;
+        background: linear-gradient(135deg, #0984e310, #74b9ff10);
+    }
+    
+    .payment-option:hover {
+        border-color: #0984e3;
+    }
+    
+    .btn-book {
+        background: linear-gradient(45deg, #e17055, #fdcb6e);
+        border: none;
+        border-radius: 15px;
+        padding: 1rem 3rem;
+        color: white;
+        font-weight: bold;
+        font-size: 1.1rem;
+        transition: transform 0.3s;
+    }
+    
+    .btn-book:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(225, 112, 85, 0.3);
+    }
+    
+    .booking-summary {
+        background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+        color: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-top: 2rem;
+    }
+    
+    .real-time-indicator {
+        display: inline-flex;
+        align-items: center;
+        background: rgba(255,255,255,0.2);
+        border-radius: 50px;
+        padding: 0.5rem 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .live-dot {
+        width: 10px;
+        height: 10px;
+        background: #00b894;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="booking-container">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <div class="booking-card">
+                    <div class="booking-header">
+                        <h2><i class="fas fa-calendar-plus me-2"></i>Book Your Parking Slot</h2>
+                        <p>Choose from available slots and select your payment method</p>
+                        <div class="real-time-indicator">
+                            <div class="live-dot"></div>
+                            Live Slot Updates
+                        </div>
+                    </div>
+                    
+                    <div class="card-body p-4">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h5><i class="fas fa-map me-2 text-primary"></i>Available Parking Slots</h5>
+                                
+                                <div class="slot-grid" id="slotGrid">
+                                    {% for slot in vacant_slots %}
+                                    <div class="slot-card available" data-slot-id="{{ slot.id }}" data-slot-number="{{ slot.slot_number }}">
+                                        <div class="slot-number">{{ slot.slot_number }}</div>
+                                        <div class="slot-status">
+                                            <i class="fas fa-circle text-success"></i> Available
+                                        </div>
+                                        <div class="slot-price">
+                                            ₹{{ slot.hourly_rate }}/hr<br>
+                                            ₹{{ slot.daily_rate }}/day
+                                        </div>
+                                        <small class="text-muted">{{ slot.slot_type|capfirst }}</small>
+                                    </div>
+                                    {% empty %}
+                                    <div class="col-12 text-center py-4">
+                                        <i class="fas fa-car fa-3x text-muted mb-3"></i>
+                                        <h5 class="text-muted">No slots available</h5>
+                                        <p class="text-muted">Please check back later</p>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                
+                                <div class="payment-options">
+                                    <h5><i class="fas fa-credit-card me-2 text-success"></i>Payment Method</h5>
+                                    
+                                    <form method="post" id="bookingForm">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="selected_slot" id="selectedSlot">
+                                        
+                                        <div class="payment-option" data-payment="hourly">
+                                            <div>
+                                                <h6><i class="fas fa-clock me-2"></i>Hourly Payment</h6>
+                                                <small class="text-muted">Pay based on hours parked</small>
+                                            </div>
+                                            <div>
+                                                <input type="radio" name="payment_type" value="hourly" class="form-check-input">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="payment-option" data-payment="daily">
+                                            <div>
+                                                <h6><i class="fas fa-calendar-day me-2"></i>Daily Payment</h6>
+                                                <small class="text-muted">Pay based on days parked</small>
+                                            </div>
+                                            <div>
+                                                <input type="radio" name="payment_type" value="daily" class="form-check-input">
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+                                
+                                <div class="text-center">
+                                    <button type="button" class="btn btn-book btn-lg" onclick="confirmBooking()">
+                                        <i class="fas fa-parking me-2"></i>Book Selected Slot
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="booking-summary">
+                                    <h5><i class="fas fa-receipt me-2"></i>Booking Summary</h5>
+                                    <div id="bookingSummary">
+                                        <p class="text-center">Select a slot to see details</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <h6><i class="fas fa-info-circle me-2"></i>Legend</h6>
+                                    <div class="d-flex flex-column gap-2">
+                                        <div><i class="fas fa-circle text-success me-2"></i>Available</div>
+                                        <div><i class="fas fa-circle text-danger me-2"></i>Occupied</div>
+                                        <div><i class="fas fa-circle text-primary me-2"></i>Selected</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedSlot = null;
+let selectedPayment = null;
+
+// Slot selection
+document.querySelectorAll('.slot-card.available').forEach(card => {
+    card.addEventListener('click', function() {
+        // Remove previous selection
+        document.querySelectorAll('.slot-card').forEach(c => c.classList.remove('selected'));
+        
+        // Select current slot
+        this.classList.add('selected');
+        selectedSlot = {
+            id: this.dataset.slotId,
+            number: this.dataset.slotNumber,
+            hourlyRate: parseFloat(this.querySelector('.slot-price').textContent.match(/₹(\d+)\/hr/)[1]),
+            dailyRate: parseFloat(this.querySelector('.slot-price').textContent.match(/₹(\d+)\/day/)[1])
+        };
+        
+        document.getElementById('selectedSlot').value = selectedSlot.id;
+        updateSummary();
+    });
+});
+
+// Payment selection
+document.querySelectorAll('.payment-option').forEach(option => {
+    option.addEventListener('click', function() {
+        // Remove previous selection
+        document.querySelectorAll('.payment-option').forEach(o => o.classList.remove('selected'));
+        
+        // Select current payment
+        this.classList.add('selected');
+        this.querySelector('input[type="radio"]').checked = true;
+        selectedPayment = this.dataset.payment;
+        updateSummary();
+    });
+});
+
+function updateSummary() {
+    const summaryDiv = document.getElementById('bookingSummary');
+    
+    if (selectedSlot && selectedPayment) {
+        const rate = selectedPayment === 'hourly' ? selectedSlot.hourlyRate : selectedSlot.dailyRate;
+        const unit = selectedPayment === 'hourly' ? 'hour' : 'day';
+        
+        summaryDiv.innerHTML = `
+            <div class="mb-3">
+                <strong>Slot: ${selectedSlot.number}</strong>
+            </div>
+            <div class="mb-3">
+                <strong>Payment: ${selectedPayment.charAt(0).toUpperCase() + selectedPayment.slice(1)}</strong>
+            </div>
+            <div class="mb-3">
+                <strong>Rate: ₹${rate}/${unit}</strong>
+            </div>
+            <hr>
+            <p><small>Final amount will be calculated based on actual parking duration</small></p>
+        `;
+    }
+}
+
+function confirmBooking() {
+    if (!selectedSlot) {
+        alert('Please select a parking slot');
+        return;
+    }
+    
+    if (!selectedPayment) {
+        alert('Please select a payment method');
+        return;
+    }
+    
+    if (confirm(`Confirm booking for slot ${selectedSlot.number}?`)) {
+        document.getElementById('bookingForm').submit();
+    }
+}
+
+// Real-time slot updates
+function refreshSlots() {
+    fetch('/api/slots/status/')
+        .then(response => response.json())
+        .then(data => {
+            // Update slot status based on real-time data
+            console.log('Updated slot data:', data);
+            // Implementation for real-time updates
+        })
+        .catch(error => console.error('Error updating slots:', error));
+}
+
+// Refresh every 30 seconds
+setInterval(refreshSlots, 30000);
+</script>
+{% endblock %}
+ 

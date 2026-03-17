@@ -1,0 +1,97 @@
+{% extends 'parking/base.html' %}
+
+{% block title %}Admin Dashboard - Smart Parking{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="fas fa-cog"></i> Admin Dashboard
+        </h2>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center bg-primary text-white">
+            <div class="card-body">
+                <i class="fas fa-parking fa-3x mb-3"></i>
+                <h4>{{ total_slots }}</h4>
+                <p>Total Slots</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center bg-success text-white">
+            <div class="card-body">
+                <i class="fas fa-check-circle fa-3x mb-3"></i>
+                <h4>{{ vacant_slots }}</h4>
+                <p>Vacant Slots</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center bg-danger text-white">
+            <div class="card-body">
+                <i class="fas fa-times-circle fa-3x mb-3"></i>
+                <h4>{{ occupied_slots }}</h4>
+                <p>Occupied Slots</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center bg-info text-white">
+            <div class="card-body">
+                <i class="fas fa-users fa-3x mb-3"></i>
+                <h4>{{ total_users }}</h4>
+                <p>Total Users</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Quick Actions</h5>
+            </div>
+            <div class="card-body text-center">
+                <a href="{% url 'manage_slots' %}" class="btn btn-primary me-2">
+                    <i class="fas fa-plus"></i> Manage Slots
+                </a>
+                <a href="" class="btn btn-info me-2">
+                    <i class="fas fa-users"></i> View Users
+                </a>
+                <a href="{% url 'admin_register' %}" class="btn btn-success">
+                    <i class="fas fa-user-plus"></i> Add Admin
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <h5><i class="fas fa-wifi"></i> Arduino Connection Status</h5>
+                <span id="connection-status">
+                    <span class="status-indicator status-offline"></span>
+                    Connecting...
+                </span>
+            </div>
+            <div class="card-body">
+                <div id="slot-grid" class="row">
+                    <!-- Real-time slot status will be displayed here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% load static %}{% static 'js/arduino.js' %}"></script>
+{% endblock %}
+

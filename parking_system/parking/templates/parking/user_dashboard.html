@@ -1,0 +1,153 @@
+{% extends 'parking/base.html' %}
+{% load static %}
+
+{% block title %}User Dashboard - Smart Parking{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="fas fa-tachometer-alt"></i> Welcome, {{ user.first_name|default:user.username }}!
+        </h2>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center bg-success text-white">
+            <div class="card-body">
+                <i class="fas fa-car-side fa-3x mb-3"></i>
+                <h4>{{ vacant_slots }}</h4>
+                <p>Available Slots</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center bg-info text-white">
+            <div class="card-body">
+                <i class="fas fa-clock fa-3x mb-3"></i>
+                <h4>{{ user_bookings.count }}</h4>
+                <p>Total Bookings</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5>Quick Actions</h5>
+                <a href="{% url 'book_slot' %}" class="btn btn-primary me-2">
+                    <i class="fas fa-plus"></i> Book Slot
+                </a>
+                <button class="btn btn-outline-primary" onclick="refreshSlots()">
+                    <i class="fas fa-sync"></i> Refresh Status
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-history"></i> Recent Bookings</h5>
+            </div>
+            <div class="card-body">
+                {% if user_bookings %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Booking ID</th>
+                                    <th>Slot</th>
+                                    <th>Start Time</th>
+                                    <th>Status</th>
+                                    <th>Amount</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for booking in user_bookings %}
+                                <tr>
+                                    <td>{{ booking.booking_id|truncatechars:8 }}</td>
+                                    <td>{{ booking.slot.slot_number }}</td>
+                                    <td>{{ booking.start_time|date:"M d, Y H:i" }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if booking.status == 'active' %}success{% elif booking.status == 'completed' %}primary{% else %}secondary{% endif %}">
+                                            {{ booking.status|capfirst }}
+                                        </span>
+                                    </td>
+                                    <td>₹{{ booking.total_amount|floatformat:2 }}</td>
+                                    <td>
+                                        {% if booking.status == 'active' %}
+                                            <a href="{% url 'cancel_booking' booking.booking_id %}" class="btn btn-sm btn-danger">Cancel</a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-car fa-4x text-muted mb-3"></i>
+                        <p class="text-muted">No bookings yet. <a href="{% url 'book_slot' %}">Book your first slot!</a></p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Real-time slot status display -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-map"></i> Live Parking Status</h5>
+            </div>
+            <div class="card-body">
+                <div id="slot-grid" class="row">
+                    <!-- Slots will be loaded here via JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function refreshSlots() {
+    fetch('/api/slots/status/')
+        .then(response => response.json())
+        .then(data => {
+            const slotGrid = document.getElementById('slot-grid');
+            slotGrid.innerHTML = '';
+            
+            data.slots.forEach(slot => {
+                const slotDiv = document.createElement('div');
+                slotDiv.className = 'col-md-2 col-sm-4 col-6 mb-3';
+                slotDiv.innerHTML = `
+                    <div class="card text-center ${slot.is_occupied ? 'bg-danger text-white' : 'bg-success text-white'}">
+                        <div class="card-body p-2">
+                            <i class="fas fa-car fa-2x mb-2"></i>
+                            <h6>${slot.slot_number}</h6>
+                            <small>${slot.is_occupied ? 'Occupied' : 'Available'}</small>
+                        </div>
+                    </div>
+                `;
+                slotGrid.appendChild(slotDiv);
+            });
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+// Load slots on page load and refresh every 30 seconds
+document.addEventListener('DOMContentLoaded', function() {
+    refreshSlots();
+    setInterval(refreshSlots, 30000);
+});
+</script>
+{% endblock %}
+
