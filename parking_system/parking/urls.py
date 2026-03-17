@@ -4,7 +4,7 @@ from . import views
 urlpatterns = [
     # Home
     path('', views.home, name='home'),
-    
+
     # User URLs
     path('user/register/', views.user_register, name='user_register'),
     path('user/login/', views.user_login, name='user_login'),
@@ -14,7 +14,7 @@ urlpatterns = [
     path('booking/confirmation/<uuid:booking_id>/', views.booking_confirmation, name='booking_confirmation'),
     path('cancel/<uuid:booking_id>/', views.cancel_booking, name='cancel_booking'),
     path('payment/<uuid:booking_id>/', views.payment, name='payment'),
-    
+
     # Admin URLs
     path('administrator/register/', views.admin_register, name='admin_register'),
     path('administrator/login/', views.admin_login, name='admin_login'),
@@ -22,12 +22,11 @@ urlpatterns = [
     path('administrator/slots/', views.manage_slots, name='manage_slots'),
     path('administrator/slots/update/<int:slot_id>/', views.update_slot, name='update_slot'),
     path('administrator/slots/delete/<int:slot_id>/', views.delete_slot, name='delete_slot'),
-    
-    # API URLs for Arduino
-    path('api/slots/status/', views.get_slot_status, name='get_slot_status'),
-    path('api/slots/update/', views.update_slot_status, name='update_slot_status'),
 
-    # API URLs for Arduino integration
+    # API URLs
     path('api/slots/status/', views.get_slot_status, name='get_slot_status'),
     path('api/slots/update/', views.update_slot_status_api, name='update_slot_status_api'),
+
+    # Arduino code uses this path
+    path('test', views.update_slot_status_api, name='arduino_test_endpoint'),
 ]

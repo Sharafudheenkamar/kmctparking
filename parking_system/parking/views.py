@@ -314,111 +314,123 @@ def payment(request, booking_id):
     }
     return render(request, 'parking/payment.html', context)
 
+
 # API Views for Arduino Integration
-def get_slot_status(request):
-    """API endpoint for Arduino to get slot status"""
-    slots = ParkingSlot.objects.all()
-    slot_data = []
-    for slot in slots:
-        slot_data.append({
-            'slot_number': slot.slot_number,
-            'arduino_pin': slot.arduino_pin,
-            'is_occupied': slot.is_occupied
-        })
-    return JsonResponse({'slots': slot_data})
 
-def update_slot_status(request):
-    """API endpoint for Arduino to update slot status"""
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        slot_number = data.get('slot_number')
-        is_occupied = data.get('is_occupied')
-        
-        try:
-            slot = ParkingSlot.objects.get(slot_number=slot_number)
-            slot.is_occupied = is_occupied
-            slot.save()
-            return JsonResponse({'status': 'success'})
-        except ParkingSlot.DoesNotExist:
-            return JsonResponse({'status': 'error', 'message': 'Slot not found'})
-    
-    return JsonResponse({'status': 'error', 'message': 'Invalid request'})
-
-@staff_member_required
-def view_users(request):
-    users = UserProfile.objects.select_related('user').all()
-    return render(request, 'parking/view_users.html', {'users': users})
+def _to_bool(value):
+    return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
-@csrf_exempt
-def update_slot_status_api(request):
-    """API endpoint to receive slot status updates from Arduino"""
-    if request.method == 'POST':
-        try:
-            # Parse JSON data
-            data = json.loads(request.body)
-            
-            # Log received data
-            print(f"📨 Received slot update: {data}")
-            
-            # Map Arduino slots to database slots
-            slot_mapping = {
-                'S1': 'A1',  # Adjust these to match your actual slot numbers
-                'S2': 'A2',
-                'S3': 'B1', 
-                'S4': 'B2'
+def _parse_arduino_payload(request):
+    """Accept JSON, normal form data, or comma-form payload like 'S1=1,S2=0,S3=1,S4=0'."""
+    content_type = request.headers.get('Content-Type', '')
+
+    if 'application/json' in content_type:
+        return json.loads(request.body or b'{}')
+
+    if request.POST:
+        return dict(request.POST.items())
+
+    raw = (request.body or b'').decode('utf-8', errors='ignore').strip()
+    data = {}
+    if raw:
+        for pair in raw.replace('&', ',').split(','):
+            if '=' in pair:
+                key, value = pair.split('=', 1)
+                data[key.strip()] = value.strip()
+    return data
+
+
+def _slot_mapping():
+    """Map Arduino channels S1..S4 to DB slot numbers."""
+    mapping = {'S1': 'A1', 'S2': 'A2', 'S3': 'B1', 'S4': 'B2'}
+
+    # Fallback: if named slots don't exist, map to first 4 DB slots by order.
+    existing_numbers = set(ParkingSlot.objects.values_list('slot_number', flat=True))
+    required = set(mapping.values())
+    if not required.issubset(existing_numbers):
+        ordered_slots = list(ParkingSlot.objects.order_by('slot_number')[:4])
+        if len(ordered_slots) == 4:
+            mapping = {
+                'S1': ordered_slots[0].slot_number,
+                'S2': ordered_slots[1].slot_number,
+                'S3': ordered_slots[2].slot_number,
+                'S4': ordered_slots[3].slot_number,
             }
-            
-            # Update each slot in database
-            updated_slots = []
-            for arduino_slot, is_occupied in data.items():
-                if arduino_slot.startswith('S') and arduino_slot in slot_mapping:
-                    db_slot_number = slot_mapping[arduino_slot]
-                    
-                    try:
-                        slot = ParkingSlot.objects.get(slot_number=db_slot_number)
-                        slot.is_occupied = bool(is_occupied)
-                        slot.save()
-                        updated_slots.append({
-                            'slot_number': db_slot_number,
-                            'is_occupied': bool(is_occupied)
-                        })
-                    except ParkingSlot.DoesNotExist:
-                        pass
-            
-            return JsonResponse({
-                'status': 'success',
-                'updated_slots': updated_slots,
-                'message': f'Updated {len(updated_slots)} slots'
-            })
-            
-        except Exception as e:
-            return JsonResponse({
-                'status': 'error',
-                'message': str(e)
-            }, status=400)
-    
-    return JsonResponse({'status': 'error', 'message': 'Only POST method allowed'}, status=405)
+    return mapping
 
-# Update the existing get_slot_status function
+
 def get_slot_status(request):
-    """API endpoint for Arduino and frontend to get current slot status"""
-    slots = ParkingSlot.objects.all()
-    slot_data = []
-    
-    for slot in slots:
-        slot_data.append({
+    """Frontend polling endpoint: returns DB-backed slot status."""
+    slots = ParkingSlot.objects.all().order_by('slot_number')
+    slot_data = [
+        {
             'slot_number': slot.slot_number,
             'arduino_pin': slot.arduino_pin,
             'is_occupied': slot.is_occupied,
             'slot_type': slot.slot_type,
             'hourly_rate': float(slot.hourly_rate),
-            'daily_rate': float(slot.daily_rate)
-        })
-    
+            'daily_rate': float(slot.daily_rate),
+        }
+        for slot in slots
+    ]
+
     return JsonResponse({
         'status': 'success',
         'slots': slot_data,
         'total_slots': len(slot_data),
-        'vacant_slots': len([s for s in slot_data if not s['is_occupied']])
+        'vacant_slots': len([s for s in slot_data if not s['is_occupied']]),
     })
+
+
+@csrf_exempt
+def update_slot_status_api(request):
+    """Arduino POST endpoint that persists occupancy in DB."""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Only POST allowed'}, status=405)
+
+    try:
+        data = _parse_arduino_payload(request)
+    except Exception as exc:
+        return JsonResponse({'status': 'error', 'message': f'Invalid payload: {exc}'}, status=400)
+
+    mapping = _slot_mapping()
+    updated_slots = []
+
+    for sensor_key in ('S1', 'S2', 'S3', 'S4'):
+        if sensor_key not in data or sensor_key not in mapping:
+            continue
+
+        slot_number = mapping[sensor_key]
+        try:
+            slot = ParkingSlot.objects.get(slot_number=slot_number)
+        except ParkingSlot.DoesNotExist:
+            continue
+
+        new_state = _to_bool(data[sensor_key])
+        if slot.is_occupied != new_state:
+            slot.is_occupied = new_state
+            slot.save(update_fields=['is_occupied', 'updated_at'])
+
+        updated_slots.append({
+            'sensor': sensor_key,
+            'slot_number': slot.slot_number,
+            'is_occupied': slot.is_occupied,
+        })
+
+    return JsonResponse({
+        'status': 'success',
+        'updated_slots': updated_slots,
+        'received': data,
+    })
+
+
+def update_slot_status(request):
+    """Backward-compatible update endpoint."""
+    return update_slot_status_api(request)
+
+
+@staff_member_required
+def view_users(request):
+    users = UserProfile.objects.select_related('user').all()
+    return render(request, 'parking/view_users.html', {'users': users})
