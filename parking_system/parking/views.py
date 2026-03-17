@@ -14,8 +14,23 @@ from django.http import JsonResponse
 import json
 from django.contrib.auth import logout
 
+ARDUINO_SLOT_CACHE = {'S1': False, 'S2': False, 'S3': False, 'S4': False}
+ARDUINO_LAST_UPDATE = None
+
 def home(request):
     return render(request, 'parking/base.html')
+
+
+def _compute_vacant_slots_count():
+    live_occupied = _get_live_occupied_by_slot_number()
+    active_booking_slot_ids = set(Booking.objects.filter(status='active').values_list('slot_id', flat=True))
+    vacant_count = 0
+    for slot in ParkingSlot.objects.all():
+        is_occupied = live_occupied.get(slot.slot_number, False)
+        is_booked = slot.id in active_booking_slot_ids
+        if not (is_occupied or is_booked):
+            vacant_count += 1
+    return vacant_count
 
 # User Authentication Views
 def user_register(request):
@@ -95,7 +110,7 @@ def user_dashboard(request):
         return redirect('admin_dashboard')
     
     user_bookings = Booking.objects.filter(user=request.user).order_by('-created_at')
-    vacant_slots = ParkingSlot.objects.filter(is_occupied=False).count()
+    vacant_slots = _compute_vacant_slots_count()
     
     context = {
         'user_bookings': user_bookings,
@@ -106,7 +121,7 @@ def user_dashboard(request):
 @staff_member_required
 def admin_dashboard(request):
     total_slots = ParkingSlot.objects.count()
-    vacant_slots = ParkingSlot.objects.filter(is_occupied=False).count()
+    vacant_slots = _compute_vacant_slots_count()
     occupied_slots = total_slots - vacant_slots
     total_users = UserProfile.objects.count()
     active_bookings = Booking.objects.filter(status='active').count()
@@ -212,7 +227,8 @@ def book_slot(request):
         slot = get_object_or_404(ParkingSlot, id=selected_slot_id)
         has_active_booking = Booking.objects.filter(slot=slot, status='active').exists()
 
-        if slot.is_occupied or has_active_booking:
+        live_occupied = _get_live_occupied_by_slot_number()
+        if live_occupied.get(slot.slot_number, False) or has_active_booking:
             messages.error(request, f'Slot {slot.slot_number} is not vacant for booking.')
             return redirect('book_slot')
 
@@ -224,9 +240,6 @@ def book_slot(request):
             end_time=end_time,
         )
 
-        slot.is_occupied = True
-        slot.save()
-
         messages.success(request, f'Slot {slot.slot_number} booked successfully!')
         return redirect('booking_confirmation', booking_id=booking.booking_id)
 
@@ -235,9 +248,11 @@ def book_slot(request):
         Booking.objects.filter(status='active').values_list('slot_id', flat=True)
     )
 
+    live_occupied = _get_live_occupied_by_slot_number()
+
     slot_states = []
     for slot in slots:
-        is_occupied = slot.is_occupied
+        is_occupied = live_occupied.get(slot.slot_number, False)
         is_booked = slot.id in active_booking_slot_ids
         is_vacant = not (is_occupied or is_booked)
 
@@ -282,11 +297,6 @@ def cancel_booking(request, booking_id):
         booking.status = 'cancelled'
         booking.end_time = timezone.now()
         booking.save()
-        
-        # Free up the slot
-        slot = booking.slot
-        slot.is_occupied = False
-        slot.save()
         
         messages.success(request, 'Booking cancelled successfully!')
     return redirect('user_dashboard')
@@ -341,6 +351,7 @@ def _parse_arduino_payload(request):
     return data
 
 
+
 def _slot_mapping():
     """Map Arduino channels S1..S4 to DB slot numbers."""
     mapping = {'S1': 'A1', 'S2': 'A2', 'S3': 'B1', 'S4': 'B2'}
@@ -360,32 +371,53 @@ def _slot_mapping():
     return mapping
 
 
+def _get_live_occupied_by_slot_number():
+    mapping = _slot_mapping()
+    reverse_mapping = {slot_number: sensor for sensor, slot_number in mapping.items()}
+    occupied = {}
+    for slot in ParkingSlot.objects.all():
+        sensor_key = reverse_mapping.get(slot.slot_number)
+        occupied[slot.slot_number] = bool(ARDUINO_SLOT_CACHE.get(sensor_key, False)) if sensor_key else False
+    return occupied
+
+
 def get_slot_status(request):
-    """Frontend polling endpoint: returns DB-backed slot status."""
+    """Frontend polling endpoint: returns Arduino-live slot status + booking flags."""
     slots = ParkingSlot.objects.all().order_by('slot_number')
-    slot_data = [
-        {
+    live_occupied = _get_live_occupied_by_slot_number()
+    active_booking_slot_ids = set(Booking.objects.filter(status='active').values_list('slot_id', flat=True))
+
+    slot_data = []
+    for slot in slots:
+        is_occupied = live_occupied.get(slot.slot_number, False)
+        is_booked = slot.id in active_booking_slot_ids
+        is_vacant = not (is_occupied or is_booked)
+        slot_data.append({
+            'slot_id': slot.id,
             'slot_number': slot.slot_number,
             'arduino_pin': slot.arduino_pin,
-            'is_occupied': slot.is_occupied,
+            'is_occupied': is_occupied,
+            'is_booked': is_booked,
+            'is_vacant': is_vacant,
             'slot_type': slot.slot_type,
             'hourly_rate': float(slot.hourly_rate),
             'daily_rate': float(slot.daily_rate),
-        }
-        for slot in slots
-    ]
+        })
 
     return JsonResponse({
         'status': 'success',
         'slots': slot_data,
         'total_slots': len(slot_data),
-        'vacant_slots': len([s for s in slot_data if not s['is_occupied']]),
+        'vacant_slots': len([s for s in slot_data if s['is_vacant']]),
+        'arduino_last_update': ARDUINO_LAST_UPDATE,
     })
 
 
 @csrf_exempt
 def update_slot_status_api(request):
-    """Arduino POST endpoint that persists occupancy in DB."""
+    """Arduino POST endpoint that updates in-memory live occupancy (not DB)."""
+    global ARDUINO_LAST_UPDATE
+
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Only POST allowed'}, status=405)
 
@@ -398,30 +430,24 @@ def update_slot_status_api(request):
     updated_slots = []
 
     for sensor_key in ('S1', 'S2', 'S3', 'S4'):
-        if sensor_key not in data or sensor_key not in mapping:
-            continue
-
-        slot_number = mapping[sensor_key]
-        try:
-            slot = ParkingSlot.objects.get(slot_number=slot_number)
-        except ParkingSlot.DoesNotExist:
+        if sensor_key not in data:
             continue
 
         new_state = _to_bool(data[sensor_key])
-        if slot.is_occupied != new_state:
-            slot.is_occupied = new_state
-            slot.save(update_fields=['is_occupied', 'updated_at'])
-
+        ARDUINO_SLOT_CACHE[sensor_key] = new_state
         updated_slots.append({
             'sensor': sensor_key,
-            'slot_number': slot.slot_number,
-            'is_occupied': slot.is_occupied,
+            'slot_number': mapping.get(sensor_key),
+            'is_occupied': new_state,
         })
+
+    ARDUINO_LAST_UPDATE = timezone.now().isoformat()
 
     return JsonResponse({
         'status': 'success',
         'updated_slots': updated_slots,
         'received': data,
+        'last_update': ARDUINO_LAST_UPDATE,
     })
 
 

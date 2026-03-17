@@ -134,40 +134,32 @@
 <script>
 let selectedSlot = null;
 let selectedPayment = null;
+let refreshInFlight = false;
 
-document.querySelectorAll('.slot-card').forEach(card => {
-    if (card.dataset.selectable !== 'true') return;
+const startInput = document.getElementById('startTime');
+const endInput = document.getElementById('endTime');
+const selectedSlotInput = document.getElementById('selectedSlot');
 
-    card.addEventListener('click', function() {
-        document.querySelectorAll('.slot-card').forEach(c => c.classList.remove('selected'));
-        this.classList.add('selected');
+function toLocalDateTimeValue(date) {
+    const tzOffset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+}
 
-        selectedSlot = {
-            id: this.dataset.slotId,
-            number: this.dataset.slotNumber,
-            hourlyRate: parseFloat(this.dataset.hourlyRate),
-            dailyRate: parseFloat(this.dataset.dailyRate)
-        };
-
-        document.getElementById('selectedSlot').value = selectedSlot.id;
-        updateSummary();
-    });
-});
-
-document.querySelectorAll('.payment-option').forEach(option => {
-    option.addEventListener('click', function() {
-        document.querySelectorAll('.payment-option').forEach(o => o.classList.remove('selected'));
-        this.classList.add('selected');
-        this.querySelector('input[type="radio"]').checked = true;
-        selectedPayment = this.dataset.payment;
-        updateSummary();
-    });
-});
+function syncEndTime() {
+    if (!startInput.value) return;
+    const startDate = new Date(startInput.value);
+    const minEndDate = new Date(startDate.getTime() + (60 * 60 * 1000));
+    const minEndValue = toLocalDateTimeValue(minEndDate);
+    endInput.min = minEndValue;
+    if (!endInput.value || endInput.value < minEndValue) {
+        endInput.value = minEndValue;
+    }
+}
 
 function updateSummary() {
     const summaryDiv = document.getElementById('bookingSummary');
-    const startTime = document.getElementById('startTime').value;
-    const endTime = document.getElementById('endTime').value;
+    const startTime = startInput.value;
+    const endTime = endInput.value;
 
     if (!selectedSlot || !selectedPayment) {
         summaryDiv.innerHTML = '<p class="text-center">Select a vacant slot and payment method</p>';
@@ -186,27 +178,89 @@ function updateSummary() {
     `;
 }
 
-const startInput = document.getElementById('startTime');
-const endInput = document.getElementById('endTime');
+function setCardState(card, state) {
+    card.classList.remove('vacant', 'occupied', 'booked', 'selected');
+    card.classList.add(state);
+    card.dataset.selectable = state === 'vacant' ? 'true' : 'false';
 
-function toLocalDateTimeValue(date) {
-    const tzOffset = date.getTimezoneOffset() * 60000;
-    return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
-}
-
-function syncEndTime() {
-    if (!startInput.value) return;
-    const startDate = new Date(startInput.value);
-    const minEndDate = new Date(startDate.getTime() + (60 * 60 * 1000));
-    const minEndValue = toLocalDateTimeValue(minEndDate);
-    endInput.min = minEndValue;
-    if (!endInput.value || endInput.value < minEndValue) {
-        endInput.value = minEndValue;
+    const statusDiv = card.querySelector('.slot-status');
+    if (state === 'vacant') {
+        statusDiv.innerHTML = '<i class="fas fa-circle text-success"></i> Vacant';
+    } else if (state === 'occupied') {
+        statusDiv.innerHTML = '<i class="fas fa-circle text-danger"></i> Occupied (sensor true)';
+    } else {
+        statusDiv.innerHTML = '<i class="fas fa-circle text-warning"></i> Occupied (booked true)';
     }
 }
 
+function applyLiveSlotStates(slots) {
+    const byNumber = new Map(slots.map(s => [s.slot_number, s]));
+
+    document.querySelectorAll('.slot-card').forEach(card => {
+        const slot = byNumber.get(card.dataset.slotNumber);
+        if (!slot) return;
+
+        const nextState = slot.is_occupied ? 'occupied' : (slot.is_booked ? 'booked' : 'vacant');
+        setCardState(card, nextState);
+
+        if (selectedSlot && selectedSlot.id === card.dataset.slotId && nextState !== 'vacant') {
+            selectedSlot = null;
+            selectedSlotInput.value = '';
+            updateSummary();
+        }
+    });
+}
+
+function refreshSlots() {
+    if (refreshInFlight || document.hidden) return;
+    refreshInFlight = true;
+
+    fetch('/api/slots/status/')
+        .then(response => response.json())
+        .then(data => {
+            if (data && Array.isArray(data.slots)) {
+                applyLiveSlotStates(data.slots);
+            }
+        })
+        .catch(error => console.error('Error refreshing slots:', error))
+        .finally(() => {
+            refreshInFlight = false;
+        });
+}
+
+document.querySelectorAll('.slot-card').forEach(card => {
+    card.addEventListener('click', function() {
+        if (this.dataset.selectable !== 'true') return;
+
+        document.querySelectorAll('.slot-card').forEach(c => c.classList.remove('selected'));
+        this.classList.add('selected');
+
+        selectedSlot = {
+            id: this.dataset.slotId,
+            number: this.dataset.slotNumber,
+            hourlyRate: parseFloat(this.dataset.hourlyRate),
+            dailyRate: parseFloat(this.dataset.dailyRate)
+        };
+
+        selectedSlotInput.value = selectedSlot.id;
+        updateSummary();
+    });
+});
+
+document.querySelectorAll('.payment-option').forEach(option => {
+    option.addEventListener('click', function() {
+        document.querySelectorAll('.payment-option').forEach(o => o.classList.remove('selected'));
+        this.classList.add('selected');
+        this.querySelector('input[type="radio"]').checked = true;
+        selectedPayment = this.dataset.payment;
+        updateSummary();
+    });
+});
+
 syncEndTime();
 updateSummary();
+refreshSlots();
+setInterval(refreshSlots, 5000);
 
 startInput.addEventListener('change', function() {
     syncEndTime();
