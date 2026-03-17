@@ -81,8 +81,9 @@
                                             <input type="datetime-local" class="form-control mb-3" id="startTime" name="start_time"
                                                    min="{{ min_start_time }}" max="{{ max_start_time }}" value="{{ min_start_time }}" required>
 
-                                            <label class="form-label fw-bold">End time</label>
-                                            <input type="datetime-local" class="form-control" id="endTime" name="end_time" required>
+                                            <label class="form-label fw-bold">End time (minimum: start + 1 hour)</label>
+                                            <input type="datetime-local" class="form-control" id="endTime" name="end_time"
+                                                   value="{{ default_end_time }}" required>
                                         </div>
 
                                         <div class="payment-option" data-payment="hourly">
@@ -188,8 +189,27 @@ function updateSummary() {
 const startInput = document.getElementById('startTime');
 const endInput = document.getElementById('endTime');
 
+function toLocalDateTimeValue(date) {
+    const tzOffset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+}
+
+function syncEndTime() {
+    if (!startInput.value) return;
+    const startDate = new Date(startInput.value);
+    const minEndDate = new Date(startDate.getTime() + (60 * 60 * 1000));
+    const minEndValue = toLocalDateTimeValue(minEndDate);
+    endInput.min = minEndValue;
+    if (!endInput.value || endInput.value < minEndValue) {
+        endInput.value = minEndValue;
+    }
+}
+
+syncEndTime();
+updateSummary();
+
 startInput.addEventListener('change', function() {
-    endInput.min = startInput.value;
+    syncEndTime();
     updateSummary();
 });
 endInput.addEventListener('change', updateSummary);
@@ -198,7 +218,8 @@ function confirmBooking() {
     if (!selectedSlot) return alert('Please select a vacant slot only.');
     if (!selectedPayment) return alert('Please select a payment method.');
     if (!startInput.value || !endInput.value) return alert('Please select both start and end time.');
-    if (endInput.value <= startInput.value) return alert('End time must be greater than start time.');
+    const minimumEnd = new Date(new Date(startInput.value).getTime() + (60 * 60 * 1000));
+    if (new Date(endInput.value).getTime() < minimumEnd.getTime()) return alert('End time must be at least 1 hour after start time.');
 
     if (confirm(`Confirm booking for slot ${selectedSlot.number}?`)) {
         document.getElementById('bookingForm').submit();

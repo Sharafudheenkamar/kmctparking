@@ -204,6 +204,11 @@ def book_slot(request):
             messages.error(request, 'End time must be greater than start time.')
             return redirect('book_slot')
 
+        minimum_end_time = start_time + timedelta(hours=1)
+        if end_time < minimum_end_time:
+            messages.error(request, 'End time must be at least 1 hour after start time.')
+            return redirect('book_slot')
+
         slot = get_object_or_404(ParkingSlot, id=selected_slot_id)
         has_active_booking = Booking.objects.filter(slot=slot, status='active').exists()
 
@@ -260,6 +265,7 @@ def book_slot(request):
         'slot_states': slot_states,
         'min_start_time': now.strftime('%Y-%m-%dT%H:%M'),
         'max_start_time': (now + timedelta(minutes=30)).strftime('%Y-%m-%dT%H:%M'),
+        'default_end_time': (now + timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M'),
     }
     return render(request, 'parking/book_slot.html', context)
 
