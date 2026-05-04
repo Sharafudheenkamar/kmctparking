@@ -1,0 +1,51 @@
+{% extends 'parking/base.html' %}
+
+{% block title %}Dummy Card Payment{% endblock %}
+
+{% block extra_css %}
+<style>
+  .pay-wrap { background: linear-gradient(135deg,#1f2937,#111827); min-height:85vh; padding:2rem 0; }
+  .pay-card { background:#fff; border-radius:18px; box-shadow:0 20px 40px rgba(0,0,0,.25); }
+  .pay-head { background:#2563eb; color:#fff; border-radius:18px 18px 0 0; padding:1.25rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pay-wrap">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-md-7">
+        <div class="pay-card">
+          <div class="pay-head text-center">
+            <h4 class="mb-0"><i class="fas fa-credit-card me-2"></i>Dummy Card Payment</h4>
+          </div>
+          <div class="p-4">
+            <p class="text-muted mb-3">Demo-only payment screen before booking confirmation.</p>
+            <div class="mb-2"><strong>Booking:</strong> {{ booking.slot.slot_number }} | {{ booking.booking_id|truncatechars:8 }}</div>
+            <div class="mb-2"><strong>Amount:</strong> ₹{{ amount|floatformat:2 }}</div>
+            <div class="mb-3"><strong>Transaction ID (from URL):</strong> {{ tx_id }}</div>
+
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="tx_id" value="{{ tx_id }}">
+              <div class="mb-3">
+                <label class="form-label">Card Holder Name</label>
+                <input class="form-control" type="text" name="card_holder_name" placeholder="John Doe" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Expiry Date</label>
+                <input class="form-control" type="month" name="expiry_date" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">CVV</label>
+                <input class="form-control" type="password" name="cvv" minlength="3" maxlength="4" pattern="[0-9]{3,4}" required>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Pay Now (Dummy)</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
