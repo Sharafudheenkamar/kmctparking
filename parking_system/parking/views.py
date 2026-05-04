@@ -241,7 +241,7 @@ def book_slot(request):
         )
 
         messages.success(request, f'Slot {slot.slot_number} booked successfully!')
-        return redirect('booking_confirmation', booking_id=booking.booking_id)
+        return redirect('dummy_paypal_payment', booking_id=booking.booking_id)
 
     slots = ParkingSlot.objects.all().order_by('slot_number')
     active_booking_slot_ids = set(
@@ -300,6 +300,29 @@ def cancel_booking(request, booking_id):
         
         messages.success(request, 'Booking cancelled successfully!')
     return redirect('user_dashboard')
+
+
+
+@login_required
+def dummy_paypal_payment(request, booking_id):
+    booking = get_object_or_404(Booking, booking_id=booking_id, user=request.user)
+
+    # keep amount in sync with booking window
+    if booking.end_time:
+        amount = booking.calculate_amount()
+    else:
+        amount = 0
+
+    booking.total_amount = amount
+    booking.save(update_fields=['total_amount'])
+
+    if request.method == 'POST':
+        booking.paid = True
+        booking.save(update_fields=['paid'])
+        messages.success(request, 'Dummy PayPal payment successful!')
+        return redirect('booking_confirmation', booking_id=booking.booking_id)
+
+    return render(request, 'parking/dummy_paypal.html', {'booking': booking, 'amount': amount})
 
 @login_required
 def payment(request, booking_id):
