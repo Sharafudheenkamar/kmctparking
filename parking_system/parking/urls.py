@@ -14,6 +14,7 @@ urlpatterns = [
     path('booking/confirmation/<uuid:booking_id>/', views.booking_confirmation, name='booking_confirmation'),
     path('cancel/<uuid:booking_id>/', views.cancel_booking, name='cancel_booking'),
     path('payment/<uuid:booking_id>/', views.payment, name='payment'),
+    path('paypal/dummy/<uuid:booking_id>/', views.dummy_paypal_payment, name='dummy_paypal_payment'),
 
     # Admin URLs
     path('administrator/register/', views.admin_register, name='admin_register'),

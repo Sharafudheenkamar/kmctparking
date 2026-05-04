@@ -1,0 +1,44 @@
+{% extends 'parking/base.html' %}
+
+{% block title %}Dummy PayPal Payment{% endblock %}
+
+{% block extra_css %}
+<style>
+  .paypal-wrap { background: linear-gradient(135deg,#0070ba,#003087); min-height:85vh; padding:2rem 0; }
+  .paypal-card { background:#fff; border-radius:18px; box-shadow:0 20px 40px rgba(0,0,0,.2); }
+  .paypal-head { background:#ffc439; border-radius:18px 18px 0 0; padding:1.5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="paypal-wrap">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-md-7">
+        <div class="paypal-card">
+          <div class="paypal-head text-center">
+            <h4 class="mb-0"><i class="fab fa-paypal me-2"></i>Dummy PayPal Checkout</h4>
+          </div>
+          <div class="p-4">
+            <p class="text-muted mb-3">This is a demo payment page.</p>
+            <div class="mb-3"><strong>Booking:</strong> {{ booking.slot.slot_number }} | {{ booking.booking_id|truncatechars:8 }}</div>
+            <div class="mb-3"><strong>Amount:</strong> ₹{{ amount|floatformat:2 }}</div>
+            <form method="post">
+              {% csrf_token %}
+              <div class="mb-3">
+                <label class="form-label">Dummy PayPal Email</label>
+                <input class="form-control" type="email" name="paypal_email" placeholder="demo@paypal.com" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Dummy Transaction ID</label>
+                <input class="form-control" type="text" name="txn_id" placeholder="PAY-123456" required>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Pay Now (Dummy)</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
